@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      0.2.0
 // @description  Counts used and unused sources on Gemini deep research results and displays the count at the top. Also numbers each source item. (Minimal change version)
-// @author       Your Name Here (or Gemini)
+// @author       Invictus
 // @match        https://gemini.google.com/app/*
 // @grant        none
 // @run-at       document-idle
