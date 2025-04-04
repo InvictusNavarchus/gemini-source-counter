@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Gemini Deep Research Source Counter
 // @namespace    http://tampermonkey.net/
-// @version      0.2.0
-// @description  Counts used and unused sources on Gemini deep research results and displays the count at the top. Also numbers each source item. (Minimal change version)
+// @version      0.3.0
+// @description  Counts used and unused sources on Gemini deep research results and displays the count at the top. Also numbers each source item. Works across chat switches.
 // @author       Invictus
 // @match        https://gemini.google.com/app/*
 // @grant        none
@@ -12,12 +12,13 @@
 (function() {
     'use strict';
 
-    const COUNTER_ID = 'gemini-source-counter-display';
+    const COUNTER_ID_PREFIX = 'gemini-source-counter-display-';
     const NUMBER_CLASS = 'gemini-source-item-number'; // Class to identify added numbers
+    const PROCESSED_ATTR = 'data-sources-counted'; // Attribute to mark processed containers
     const MAX_TRIES = 60; // Try for ~30 seconds (60 * 500ms)
     let tries = 0;
 
-    console.log("Gemini Source Counter: Script loaded."); // Version updated in log
+    console.log("Gemini Source Counter: Script loaded. Version 0.3.0"); // Updated version
 
     // --- Selectors ---
     const overallResponseParentSelector = 'response-container';
@@ -27,33 +28,35 @@
     const sourceListItemSelector = 'browse-item';
     const insertionPointSelector = '.response-container-content';
 
-    // --- Main Function (Kept original name 'addSourceCounts') ---
-    function addSourceCounts() {
-        tries++;
-        console.log(`Gemini Source Counter: Attempt ${tries}/${MAX_TRIES}`); // Version updated in log
-
-        // Check if the counter already exists
-        if (document.getElementById(COUNTER_ID)) {
-            console.log("Gemini Source Counter: Counter already exists.");
-            return true;
-        }
-
-        const overallParent = document.querySelector(overallResponseParentSelector);
-        if (!overallParent) {
-             console.log("Gemini Source Counter: Overall response parent container not found yet.");
-             return false;
-        }
-
-        const sourceListContainer = overallParent.querySelector(sourceListContainerSelector);
-        if (!sourceListContainer) {
-            if (tries > 10) console.log("Gemini Source Counter: Source list container not found within parent (might not be deep research?).");
-            else console.log("Gemini Source Counter: Source list container not found within parent yet.");
+    // --- Process a single response container ---
+    function processResponseContainer(responseContainer) {
+        // Skip if already processed
+        if (responseContainer.hasAttribute(PROCESSED_ATTR)) {
             return false;
         }
 
-        const insertionPoint = overallParent.querySelector(insertionPointSelector);
-         if (!insertionPoint) {
-            console.log("Gemini Source Counter: Insertion point not found within parent yet.");
+        // Generate a unique ID for this container
+        const containerId = responseContainer.id || 
+            `container-${Math.random().toString(36).substring(2, 9)}`;
+        if (!responseContainer.id) {
+            responseContainer.id = containerId;
+        }
+        
+        const counterID = `${COUNTER_ID_PREFIX}${containerId}`;
+        
+        // Check if counter already exists for this container
+        if (document.getElementById(counterID)) {
+            return false;
+        }
+
+        const sourceListContainer = responseContainer.querySelector(sourceListContainerSelector);
+        if (!sourceListContainer) {
+            // This response doesn't have sources, might not be deep research
+            return false;
+        }
+
+        const insertionPoint = responseContainer.querySelector(insertionPointSelector);
+        if (!insertionPoint) {
             return false;
         }
 
@@ -63,13 +66,13 @@
         if (usedSourcesList) {
             const usedItems = usedSourcesList.querySelectorAll(sourceListItemSelector);
             usedSourcesCount = usedItems.length;
-            console.log(`Gemini Source Counter: Found ${usedSourcesCount} used sources.`);
+            console.log(`Gemini Source Counter: Found ${usedSourcesCount} used sources in ${containerId}.`);
 
-            // --- Start: ADDED NUMBERING LOGIC for used list ---
+            // Number used sources if not already numbered
             if (usedItems.length > 0) {
                 const firstItemFirstChild = usedItems[0].firstChild;
                 if (!(firstItemFirstChild && firstItemFirstChild.nodeType === Node.ELEMENT_NODE && firstItemFirstChild.classList.contains(NUMBER_CLASS))) {
-                    console.log(`Gemini Source Counter: Numbering ${usedItems.length} used items.`); // Added log for numbering action
+                    console.log(`Gemini Source Counter: Numbering ${usedItems.length} used items.`);
                     usedItems.forEach((item, index) => {
                         const numberSpan = document.createElement('span');
                         numberSpan.className = NUMBER_CLASS;
@@ -80,10 +83,6 @@
                     });
                 }
             }
-            // --- End: ADDED NUMBERING LOGIC ---
-
-        } else {
-            console.log("Gemini Source Counter: Used sources list div not found.");
         }
 
         let unusedSourcesCount = 0;
@@ -91,36 +90,28 @@
         if (unusedSourcesList) {
             const unusedItems = unusedSourcesList.querySelectorAll(sourceListItemSelector);
             unusedSourcesCount = unusedItems.length;
-             console.log(`Gemini Source Counter: Found ${unusedSourcesCount} unused sources.`);
+            console.log(`Gemini Source Counter: Found ${unusedSourcesCount} unused sources in ${containerId}.`);
 
-            // --- Start: ADDED NUMBERING LOGIC for unused list ---
+            // Number unused sources if not already numbered
             if (unusedItems.length > 0) {
-                 const firstItemFirstChild = unusedItems[0].firstChild;
-                 if (!(firstItemFirstChild && firstItemFirstChild.nodeType === Node.ELEMENT_NODE && firstItemFirstChild.classList.contains(NUMBER_CLASS))) {
-                    console.log(`Gemini Source Counter: Numbering ${unusedItems.length} unused items.`); // Added log for numbering action
+                const firstItemFirstChild = unusedItems[0].firstChild;
+                if (!(firstItemFirstChild && firstItemFirstChild.nodeType === Node.ELEMENT_NODE && firstItemFirstChild.classList.contains(NUMBER_CLASS))) {
+                    console.log(`Gemini Source Counter: Numbering ${unusedItems.length} unused items.`);
                     unusedItems.forEach((item, index) => {
-                         const numberSpan = document.createElement('span');
-                         numberSpan.className = NUMBER_CLASS;
-                         numberSpan.textContent = `${index + 1}. `;
-                         numberSpan.style.fontWeight = 'bold';
-                         numberSpan.style.marginRight = '5px';
-                         item.insertBefore(numberSpan, item.firstChild);
-                     });
-                 }
-             }
-             // --- End: ADDED NUMBERING LOGIC ---
-
-        } else {
-             console.log("Gemini Source Counter: Unused sources list div not found.");
-        }
-
-        if (!usedSourcesList && !unusedSourcesList) {
-             console.log("Gemini Source Counter: Neither specific source list found inside container. Structure might have changed.");
+                        const numberSpan = document.createElement('span');
+                        numberSpan.className = NUMBER_CLASS;
+                        numberSpan.textContent = `${index + 1}. `;
+                        numberSpan.style.fontWeight = 'bold';
+                        numberSpan.style.marginRight = '5px';
+                        item.insertBefore(numberSpan, item.firstChild);
+                    });
+                }
+            }
         }
 
         // --- Create and Insert Display Element ---
         const displayDiv = document.createElement('div');
-        displayDiv.id = COUNTER_ID;
+        displayDiv.id = counterID;
         displayDiv.textContent = `Sources Count -> Used: ${usedSourcesCount}, Not Used: ${unusedSourcesCount}`;
         displayDiv.style.fontWeight = 'bold';
         displayDiv.style.padding = '8px 16px 4px 24px';
@@ -131,46 +122,61 @@
 
         if (insertionPoint.firstChild) {
             insertionPoint.insertBefore(displayDiv, insertionPoint.firstChild);
-            console.log("Gemini Source Counter: Counter display inserted.");
         } else {
             insertionPoint.appendChild(displayDiv);
-             console.log("Gemini Source Counter: Counter display appended (insertion point had no children).");
         }
 
-        return true; // Indicate success
+        // Mark as processed
+        responseContainer.setAttribute(PROCESSED_ATTR, 'true');
+        console.log(`Gemini Source Counter: Processed container ${containerId}`);
+        
+        return true;
     }
 
-    // --- Use MutationObserver ---
-    let observer = null;
+    // --- Main function to scan for and process all response containers ---
+    function scanAndProcessResponses() {
+        tries++;
+        let processedAny = false;
+        
+        const responseContainers = document.querySelectorAll(overallResponseParentSelector);
+        
+        if (responseContainers.length === 0) {
+            if (tries % 10 === 0) console.log(`Gemini Source Counter: No response containers found yet. Attempt ${tries}`);
+            return false;
+        }
+        
+        // Process each container
+        responseContainers.forEach(container => {
+            if (processResponseContainer(container)) {
+                processedAny = true;
+            }
+        });
+        
+        return processedAny;
+    }
+
+    // --- Use MutationObserver (now persistent) ---
     const targetNode = document.body;
     const config = { childList: true, subtree: true };
 
     const callback = function(mutationsList, obs) {
-         // Check if the elements exist now
-         if (addSourceCounts()) { // Function name kept as addSourceCounts
-             console.log("Gemini Source Counter: Elements found via MutationObserver. Stopping observer.");
-             if (observer) observer.disconnect();
-             if (checkInterval) clearInterval(checkInterval);
-         }
+        // Check for new responses on DOM changes
+        scanAndProcessResponses();
     };
 
-    observer = new MutationObserver(callback);
+    const observer = new MutationObserver(callback);
     observer.observe(targetNode, config);
-    console.log("Gemini Source Counter: MutationObserver started.");
-
+    console.log("Gemini Source Counter: MutationObserver started (persistent mode).");
 
     // --- Fallback Interval Timer ---
     const checkInterval = setInterval(() => {
-        if (tries >= MAX_TRIES) {
-             clearInterval(checkInterval);
-             if (observer) observer.disconnect();
-             if (!document.getElementById(COUNTER_ID)) {
-                 console.log("Gemini Source Counter: Timed out waiting for elements.");
-             }
-        } else if (addSourceCounts()) { // Try adding counts and numbers on interval (Function name kept)
-             clearInterval(checkInterval);
-             if (observer) observer.disconnect();
-             console.log("Gemini Source Counter: Elements found via Interval. Stopping checks.");
+        if (tries >= MAX_TRIES && document.querySelectorAll(overallResponseParentSelector).length === 0) {
+            // Only clear the interval if we've tried many times and still no containers
+            clearInterval(checkInterval);
+            console.log("Gemini Source Counter: Timed out waiting for response containers.");
+        } else {
+            // Keep checking for new containers
+            scanAndProcessResponses();
         }
     }, 500);
 
