@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gemini Deep Research Source Counter
 // @namespace    http://tampermonkey.net/
-// @version      0.5.0
+// @version      0.5.1
 // @description  Counts used and unused sources on Gemini deep research results and displays the count at the top. Also numbers each source item. Works across chat switches.
 // @author       Invictus
 // @match        https://gemini.google.com/*
@@ -17,8 +17,9 @@
     const COUNTER_ID_PREFIX = 'gemini-source-counter-display-';
     const NUMBER_CLASS = 'gemini-source-item-number'; // Class to identify added numbers
     const PROCESSED_ATTR = 'data-sources-counted'; // Attribute to mark processed containers
+    const RESEARCH_PROCESSED_ATTR = 'data-research-counted'; // Attribute for research containers
 
-    console.log("Gemini Source Counter: Script loaded. Version 0.5.0");
+    console.log("Gemini Source Counter: Script loaded. Version 0.5.1");
 
     // --- Selectors ---
     const overallResponseParentSelector = 'response-container';
@@ -32,6 +33,149 @@
     const thinkingPanelSelector = 'thinking-panel';
     const researchWebsitesContainerSelector = '.browse-container';
     const researchWebsitesItemSelector = 'browse-chip';
+
+    // Function to update research websites count and numbering
+    function processResearchWebsites(thinkingPanel, displayDiv) {
+        if (!thinkingPanel || thinkingPanel.hasAttribute(RESEARCH_PROCESSED_ATTR)) {
+            return 0;
+        }
+        
+        let researchWebsitesCount = 0;
+        const researchContainers = thinkingPanel.querySelectorAll(researchWebsitesContainerSelector);
+        
+        researchContainers.forEach(container => {
+            // Skip if this specific container already processed
+            if (container.hasAttribute(RESEARCH_PROCESSED_ATTR)) {
+                // Still count these items for the total
+                researchWebsitesCount += container.querySelectorAll(researchWebsitesItemSelector).length;
+                return;
+            }
+            
+            const researchItems = container.querySelectorAll(researchWebsitesItemSelector);
+            const newItemsCount = researchItems.length;
+            researchWebsitesCount += newItemsCount;
+            
+            // Number research websites if not already numbered
+            if (researchItems.length > 0) {
+                const firstItemFirstChild = researchItems[0].firstChild;
+                if (!(firstItemFirstChild && firstItemFirstChild.nodeType === Node.ELEMENT_NODE && firstItemFirstChild.classList.contains(NUMBER_CLASS))) {
+                    console.log(`Gemini Source Counter: Numbering ${researchItems.length} research websites.`);
+                    researchItems.forEach((item, index) => {
+                        const numberSpan = document.createElement('span');
+                        numberSpan.className = NUMBER_CLASS;
+                        numberSpan.textContent = `${index + 1}. `;
+                        numberSpan.style.fontWeight = 'bold';
+                        numberSpan.style.marginRight = '5px';
+                        numberSpan.style.position = 'absolute';
+                        numberSpan.style.left = '3px';
+                        numberSpan.style.top = '50%';
+                        numberSpan.style.transform = 'translateY(-50%)';
+                        item.style.position = 'relative';
+                        item.style.paddingLeft = '25px';
+                        item.insertBefore(numberSpan, item.firstChild);
+                    });
+                }
+            }
+            
+            // Mark container as processed
+            container.setAttribute(RESEARCH_PROCESSED_ATTR, 'true');
+            
+            // Setup observer for this specific research container to watch for new items
+            setupResearchContainerObserver(container, displayDiv);
+        });
+        
+        return researchWebsitesCount;
+    }
+    
+    // Function to update the display with new research website count
+    function updateResearchCount(responseContainer) {
+        const containerId = responseContainer.id;
+        const counterID = `${COUNTER_ID_PREFIX}${containerId}`;
+        const displayDiv = document.getElementById(counterID);
+        
+        if (!displayDiv) return;
+        
+        // Get current counts from display text
+        const displayText = displayDiv.textContent;
+        const usedMatch = displayText.match(/Used: (\d+)/);
+        const unusedMatch = displayText.match(/Not Used: (\d+)/);
+        
+        const usedSourcesCount = usedMatch ? parseInt(usedMatch[1]) : 0;
+        const unusedSourcesCount = unusedMatch ? parseInt(unusedMatch[1]) : 0;
+        
+        // Get new research websites count
+        const thinkingPanel = responseContainer.querySelector(thinkingPanelSelector);
+        let researchWebsitesCount = 0;
+        
+        if (thinkingPanel) {
+            researchWebsitesCount = processResearchWebsites(thinkingPanel, displayDiv);
+            console.log(`Gemini Source Counter: Updated count - ${researchWebsitesCount} research websites in ${containerId}.`);
+        }
+        
+        // Update display text
+        displayDiv.textContent = `Sources Count -> Used: ${usedSourcesCount}, Not Used: ${unusedSourcesCount}`;
+        
+        // Add research websites count if any
+        if (researchWebsitesCount > 0) {
+            displayDiv.textContent += `, Research Websites: ${researchWebsitesCount}`;
+        }
+    }
+    
+    // Setup observer for research container to watch for new items
+    function setupResearchContainerObserver(container, displayDiv) {
+        const parentContainer = container.closest(overallResponseParentSelector);
+        if (!parentContainer) return;
+        
+        const researchObserver = new MutationObserver(function(mutations) {
+            let newItemsAdded = false;
+            
+            mutations.forEach(mutation => {
+                if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                    newItemsAdded = true;
+                }
+            });
+            
+            if (newItemsAdded) {
+                console.log("Gemini Source Counter: Detected new research websites added.");
+                updateResearchCount(parentContainer);
+            }
+        });
+        
+        researchObserver.observe(container, { childList: true, subtree: true });
+        console.log("Gemini Source Counter: Research container observer started.");
+    }
+    
+    // Setup observer for thinking panel to watch for new research containers
+    function setupThinkingPanelObserver(thinkingPanel) {
+        const parentContainer = thinkingPanel.closest(overallResponseParentSelector);
+        if (!parentContainer) return;
+        
+        const thinkingObserver = new MutationObserver(function(mutations) {
+            let newContainersAdded = false;
+            
+            mutations.forEach(mutation => {
+                if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                    // Check if any added nodes are research containers or contain them
+                    mutation.addedNodes.forEach(node => {
+                        if (node.nodeType === Node.ELEMENT_NODE) {
+                            if (node.matches(researchWebsitesContainerSelector) || 
+                                node.querySelector(researchWebsitesContainerSelector)) {
+                                newContainersAdded = true;
+                            }
+                        }
+                    });
+                }
+            });
+            
+            if (newContainersAdded) {
+                console.log("Gemini Source Counter: Detected new research container added.");
+                updateResearchCount(parentContainer);
+            }
+        });
+        
+        thinkingObserver.observe(thinkingPanel, { childList: true, subtree: true });
+        console.log("Gemini Source Counter: Thinking panel observer started.");
+    }
 
     // --- Process a single response container ---
     function processResponseContainer(responseContainer) {
@@ -118,47 +262,22 @@
         let researchWebsitesCount = 0;
         const thinkingPanel = responseContainer.querySelector(thinkingPanelSelector);
         
-        if (thinkingPanel) {
-            const researchContainers = thinkingPanel.querySelectorAll(researchWebsitesContainerSelector);
-            
-            researchContainers.forEach(container => {
-                const researchItems = container.querySelectorAll(researchWebsitesItemSelector);
-                researchWebsitesCount += researchItems.length;
-                
-                // Number research websites if not already numbered
-                if (researchItems.length > 0) {
-                    const firstItemFirstChild = researchItems[0].firstChild;
-                    if (!(firstItemFirstChild && firstItemFirstChild.nodeType === Node.ELEMENT_NODE && firstItemFirstChild.classList.contains(NUMBER_CLASS))) {
-                        console.log(`Gemini Source Counter: Numbering ${researchItems.length} research websites.`);
-                        researchItems.forEach((item, index) => {
-                            const numberSpan = document.createElement('span');
-                            numberSpan.className = NUMBER_CLASS;
-                            numberSpan.textContent = `${index + 1}. `;
-                            numberSpan.style.fontWeight = 'bold';
-                            numberSpan.style.marginRight = '5px';
-                            numberSpan.style.position = 'absolute';
-                            numberSpan.style.left = '3px';
-                            numberSpan.style.top = '50%';
-                            numberSpan.style.transform = 'translateY(-50%)';
-                            item.style.position = 'relative';
-                            item.style.paddingLeft = '25px';
-                            item.insertBefore(numberSpan, item.firstChild);
-                        });
-                    }
-                }
-            });
-            
-            console.log(`Gemini Source Counter: Found ${researchWebsitesCount} research websites in ${containerId}.`);
-        }
-
         // --- Create and Insert Display Element ---
         const displayDiv = document.createElement('div');
         displayDiv.id = counterID;
         displayDiv.textContent = `Sources Count -> Used: ${usedSourcesCount}, Not Used: ${unusedSourcesCount}`;
         
         // Add research websites count if any
-        if (researchWebsitesCount > 0) {
-            displayDiv.textContent += `, Research Websites: ${researchWebsitesCount}`;
+        if (thinkingPanel) {
+            // Set up observer for thinking panel
+            setupThinkingPanelObserver(thinkingPanel);
+            
+            // Process initial research websites
+            researchWebsitesCount = processResearchWebsites(thinkingPanel, displayDiv);
+            
+            if (researchWebsitesCount > 0) {
+                displayDiv.textContent += `, Research Websites: ${researchWebsitesCount}`;
+            }
         }
         
         displayDiv.style.fontWeight = 'bold';
