@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gemini Deep Research Source Counter
 // @namespace    http://tampermonkey.net/
-// @version      0.5.1
+// @version      0.6.0
 // @description  Counts used and unused sources on Gemini deep research results and displays the count at the top. Also numbers each source item. Works across chat switches.
 // @author       Invictus
 // @match        https://gemini.google.com/*
@@ -18,8 +18,9 @@
     const NUMBER_CLASS = 'gemini-source-item-number'; // Class to identify added numbers
     const PROCESSED_ATTR = 'data-sources-counted'; // Attribute to mark processed containers
     const RESEARCH_PROCESSED_ATTR = 'data-research-counted'; // Attribute for research containers
+    const RESEARCH_IN_PROGRESS_ATTR = 'data-research-in-progress'; // Attribute for active research
 
-    console.log("Gemini Source Counter: Script loaded. Version 0.5.1");
+    console.log("Gemini Source Counter: Script loaded. Version 0.6.0");
 
     // --- Selectors ---
     const overallResponseParentSelector = 'response-container';
@@ -33,6 +34,54 @@
     const thinkingPanelSelector = 'thinking-panel';
     const researchWebsitesContainerSelector = '.browse-container';
     const researchWebsitesItemSelector = 'browse-chip';
+    
+    // Active research panel selector
+    const extendedResponsePanelSelector = 'extended-response-panel';
+    
+    // Function to create counter display for active research
+    function createActiveResearchCounter(responsePanel) {
+        // Skip if already processed
+        if (responsePanel.hasAttribute(RESEARCH_IN_PROGRESS_ATTR)) {
+            return null;
+        }
+        
+        const containerId = responsePanel.id || 
+            `active-research-${Math.random().toString(36).substring(2, 9)}`;
+        if (!responsePanel.id) {
+            responsePanel.id = containerId;
+        }
+        
+        const counterID = `${COUNTER_ID_PREFIX}${containerId}`;
+        
+        // Check if counter already exists
+        let displayDiv = document.getElementById(counterID);
+        if (displayDiv) {
+            return displayDiv;
+        }
+        
+        // Create display element
+        displayDiv = document.createElement('div');
+        displayDiv.id = counterID;
+        displayDiv.textContent = `Research in progress: 0 websites visited`;
+        displayDiv.style.fontWeight = 'bold';
+        displayDiv.style.padding = '8px 16px 4px 24px';
+        displayDiv.style.fontSize = '0.9em';
+        displayDiv.style.color = 'var(--mat-sidenav-content-text-color, #3c4043)';
+        displayDiv.style.borderBottom = '1px solid var(--mat-divider-color, #dadce0)';
+        displayDiv.style.marginBottom = '8px';
+        
+        // Find toolbar to insert after
+        const toolbar = responsePanel.querySelector('toolbar');
+        if (toolbar) {
+            toolbar.insertAdjacentElement('afterend', displayDiv);
+            console.log(`Gemini Source Counter: Created active research counter for ${containerId}`);
+        }
+        
+        // Mark as processed
+        responsePanel.setAttribute(RESEARCH_IN_PROGRESS_ATTR, 'true');
+        
+        return displayDiv;
+    }
 
     // Function to update research websites count and numbering
     function processResearchWebsites(thinkingPanel, displayDiv) {
@@ -88,20 +137,25 @@
     }
     
     // Function to update the display with new research website count
-    function updateResearchCount(responseContainer) {
+    function updateResearchCount(responseContainer, isActiveResearch = false) {
         const containerId = responseContainer.id;
         const counterID = `${COUNTER_ID_PREFIX}${containerId}`;
         const displayDiv = document.getElementById(counterID);
         
         if (!displayDiv) return;
         
-        // Get current counts from display text
-        const displayText = displayDiv.textContent;
-        const usedMatch = displayText.match(/Used: (\d+)/);
-        const unusedMatch = displayText.match(/Not Used: (\d+)/);
+        // Get current counts from display text if not active research
+        let usedSourcesCount = 0;
+        let unusedSourcesCount = 0;
         
-        const usedSourcesCount = usedMatch ? parseInt(usedMatch[1]) : 0;
-        const unusedSourcesCount = unusedMatch ? parseInt(unusedMatch[1]) : 0;
+        if (!isActiveResearch) {
+            const displayText = displayDiv.textContent;
+            const usedMatch = displayText.match(/Used: (\d+)/);
+            const unusedMatch = displayText.match(/Not Used: (\d+)/);
+            
+            usedSourcesCount = usedMatch ? parseInt(usedMatch[1]) : 0;
+            unusedSourcesCount = unusedMatch ? parseInt(unusedMatch[1]) : 0;
+        }
         
         // Get new research websites count
         const thinkingPanel = responseContainer.querySelector(thinkingPanelSelector);
@@ -113,17 +167,22 @@
         }
         
         // Update display text
-        displayDiv.textContent = `Sources Count -> Used: ${usedSourcesCount}, Not Used: ${unusedSourcesCount}`;
-        
-        // Add research websites count if any
-        if (researchWebsitesCount > 0) {
-            displayDiv.textContent += `, Research Websites: ${researchWebsitesCount}`;
+        if (isActiveResearch) {
+            displayDiv.textContent = `Research in progress: ${researchWebsitesCount} websites visited`;
+        } else {
+            displayDiv.textContent = `Sources Count -> Used: ${usedSourcesCount}, Not Used: ${unusedSourcesCount}`;
+            
+            // Add research websites count if any
+            if (researchWebsitesCount > 0) {
+                displayDiv.textContent += `, Research Websites: ${researchWebsitesCount}`;
+            }
         }
     }
     
     // Setup observer for research container to watch for new items
     function setupResearchContainerObserver(container, displayDiv) {
-        const parentContainer = container.closest(overallResponseParentSelector);
+        const parentContainer = container.closest(overallResponseParentSelector) || 
+                                container.closest(extendedResponsePanelSelector);
         if (!parentContainer) return;
         
         const researchObserver = new MutationObserver(function(mutations) {
@@ -137,7 +196,8 @@
             
             if (newItemsAdded) {
                 console.log("Gemini Source Counter: Detected new research websites added.");
-                updateResearchCount(parentContainer);
+                const isActiveResearch = parentContainer.hasAttribute(RESEARCH_IN_PROGRESS_ATTR);
+                updateResearchCount(parentContainer, isActiveResearch);
             }
         });
         
@@ -147,7 +207,8 @@
     
     // Setup observer for thinking panel to watch for new research containers
     function setupThinkingPanelObserver(thinkingPanel) {
-        const parentContainer = thinkingPanel.closest(overallResponseParentSelector);
+        const parentContainer = thinkingPanel.closest(overallResponseParentSelector) || 
+                              thinkingPanel.closest(extendedResponsePanelSelector);
         if (!parentContainer) return;
         
         const thinkingObserver = new MutationObserver(function(mutations) {
@@ -169,7 +230,8 @@
             
             if (newContainersAdded) {
                 console.log("Gemini Source Counter: Detected new research container added.");
-                updateResearchCount(parentContainer);
+                const isActiveResearch = parentContainer.hasAttribute(RESEARCH_IN_PROGRESS_ATTR);
+                updateResearchCount(parentContainer, isActiveResearch);
             }
         });
         
@@ -201,7 +263,11 @@
         const sourceListContainer = responseContainer.querySelector(sourceListContainerSelector);
         if (!sourceListContainer) {
             // This response doesn't have sources, might not be deep research
-            return false;
+            // But still check for thinking panel in case research is in progress
+            const thinkingPanel = responseContainer.querySelector(thinkingPanelSelector);
+            if (!thinkingPanel) {
+                return false;
+            }
         }
 
         const insertionPoint = responseContainer.querySelector(insertionPointSelector);
@@ -211,7 +277,7 @@
 
         // --- Count Sources and Add Numbers ---
         let usedSourcesCount = 0;
-        const usedSourcesList = sourceListContainer.querySelector(usedSourcesListSelector);
+        const usedSourcesList = sourceListContainer ? sourceListContainer.querySelector(usedSourcesListSelector) : null;
         if (usedSourcesList) {
             const usedItems = usedSourcesList.querySelectorAll(sourceListItemSelector);
             usedSourcesCount = usedItems.length;
@@ -235,7 +301,7 @@
         }
 
         let unusedSourcesCount = 0;
-        const unusedSourcesList = sourceListContainer.querySelector(unusedSourcesListSelector);
+        const unusedSourcesList = sourceListContainer ? sourceListContainer.querySelector(unusedSourcesListSelector) : null;
         if (unusedSourcesList) {
             const unusedItems = unusedSourcesList.querySelectorAll(sourceListItemSelector);
             unusedSourcesCount = unusedItems.length;
@@ -299,14 +365,51 @@
         
         return true;
     }
+    
+    // --- Process extended response panel (active research) ---
+    function processActiveResearch(extendedPanel) {
+        if (!extendedPanel || extendedPanel.hasAttribute(RESEARCH_IN_PROGRESS_ATTR)) {
+            return false;
+        }
+        
+        const thinkingPanel = extendedPanel.querySelector(thinkingPanelSelector);
+        if (!thinkingPanel) {
+            return false;
+        }
+        
+        // Create counter display
+        const displayDiv = createActiveResearchCounter(extendedPanel);
+        if (!displayDiv) {
+            return false;
+        }
+        
+        // Set up observer for thinking panel
+        setupThinkingPanelObserver(thinkingPanel);
+        
+        // Process initial research websites
+        const researchWebsitesCount = processResearchWebsites(thinkingPanel, displayDiv);
+        displayDiv.textContent = `Research in progress: ${researchWebsitesCount} websites visited`;
+        
+        console.log(`Gemini Source Counter: Processed active research panel`);
+        return true;
+    }
 
     // --- Main function to scan for and process all response containers ---
     function scanAndProcessResponses() {
         let processedAny = false;
         
+        // Check for active research panels first
+        const activeResearchPanels = document.querySelectorAll(extendedResponsePanelSelector);
+        activeResearchPanels.forEach(panel => {
+            if (processActiveResearch(panel)) {
+                processedAny = true;
+            }
+        });
+        
+        // Then process regular response containers
         const responseContainers = document.querySelectorAll(overallResponseParentSelector);
         
-        if (responseContainers.length === 0) {
+        if (responseContainers.length === 0 && !processedAny) {
             return false;
         }
         
