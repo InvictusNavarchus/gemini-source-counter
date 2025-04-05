@@ -7,8 +7,8 @@
 // @match        https://gemini.google.com/*
 // @grant        none
 // @run-at       document-idle
-// @updateURL   https://raw.githubusercontent.com/InvictusNavarchus/gemini-source-counter/master/gemini-source-counter.user.js
-// @downloadURL https://raw.githubusercontent.com/InvictusNavarchus/gemini-source-counter/master/gemini-source-counter.user.js
+// @updateURL    https://raw.githubusercontent.com/InvictusNavarchus/gemini-source-counter/master/gemini-source-counter.user.js
+// @downloadURL  https://raw.githubusercontent.com/InvictusNavarchus/gemini-source-counter/master/gemini-source-counter.user.js
 // ==/UserScript==
 
 (function() {
