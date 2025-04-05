@@ -15,10 +15,8 @@
     const COUNTER_ID_PREFIX = 'gemini-source-counter-display-';
     const NUMBER_CLASS = 'gemini-source-item-number'; // Class to identify added numbers
     const PROCESSED_ATTR = 'data-sources-counted'; // Attribute to mark processed containers
-    const MAX_TRIES = 60; // Try for ~30 seconds (60 * 500ms)
-    let tries = 0;
 
-    console.log("Gemini Source Counter: Script loaded. Version 0.3.0"); // Updated version
+    console.log("Gemini Source Counter: Script loaded. Version 0.3.0");
 
     // --- Selectors ---
     const overallResponseParentSelector = 'response-container';
@@ -135,13 +133,11 @@
 
     // --- Main function to scan for and process all response containers ---
     function scanAndProcessResponses() {
-        tries++;
         let processedAny = false;
         
         const responseContainers = document.querySelectorAll(overallResponseParentSelector);
         
         if (responseContainers.length === 0) {
-            if (tries % 10 === 0) console.log(`Gemini Source Counter: No response containers found yet. Attempt ${tries}`);
             return false;
         }
         
@@ -155,7 +151,7 @@
         return processedAny;
     }
 
-    // --- Use MutationObserver (now persistent) ---
+    // --- Use MutationObserver ---
     const targetNode = document.body;
     const config = { childList: true, subtree: true };
 
@@ -166,18 +162,8 @@
 
     const observer = new MutationObserver(callback);
     observer.observe(targetNode, config);
-    console.log("Gemini Source Counter: MutationObserver started (persistent mode).");
-
-    // --- Fallback Interval Timer ---
-    const checkInterval = setInterval(() => {
-        if (tries >= MAX_TRIES && document.querySelectorAll(overallResponseParentSelector).length === 0) {
-            // Only clear the interval if we've tried many times and still no containers
-            clearInterval(checkInterval);
-            console.log("Gemini Source Counter: Timed out waiting for response containers.");
-        } else {
-            // Keep checking for new containers
-            scanAndProcessResponses();
-        }
-    }, 500);
-
+    console.log("Gemini Source Counter: MutationObserver started.");
+    
+    // Initial scan in case elements already exist when script loads
+    scanAndProcessResponses();
 })();
