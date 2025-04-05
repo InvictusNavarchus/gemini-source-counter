@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Gemini Deep Research Source Counter
 // @namespace    http://tampermonkey.net/
-// @version      0.4.0
+// @version      0.5.0
 // @description  Counts used and unused sources on Gemini deep research results and displays the count at the top. Also numbers each source item. Works across chat switches.
 // @author       Invictus
 // @match        https://gemini.google.com/*
@@ -18,7 +18,7 @@
     const NUMBER_CLASS = 'gemini-source-item-number'; // Class to identify added numbers
     const PROCESSED_ATTR = 'data-sources-counted'; // Attribute to mark processed containers
 
-    console.log("Gemini Source Counter: Script loaded. Version 0.3.0");
+    console.log("Gemini Source Counter: Script loaded. Version 0.5.0");
 
     // --- Selectors ---
     const overallResponseParentSelector = 'response-container';
@@ -27,6 +27,11 @@
     const unusedSourcesListSelector = 'div.source-list.unused-sources';
     const sourceListItemSelector = 'browse-item';
     const insertionPointSelector = '.response-container-content';
+    
+    // New selectors for research websites in thinking panel
+    const thinkingPanelSelector = 'thinking-panel';
+    const researchWebsitesContainerSelector = '.browse-container';
+    const researchWebsitesItemSelector = 'browse-chip';
 
     // --- Process a single response container ---
     function processResponseContainer(responseContainer) {
@@ -108,11 +113,54 @@
                 }
             }
         }
+        
+        // --- Count Research Websites in Thinking Panel ---
+        let researchWebsitesCount = 0;
+        const thinkingPanel = responseContainer.querySelector(thinkingPanelSelector);
+        
+        if (thinkingPanel) {
+            const researchContainers = thinkingPanel.querySelectorAll(researchWebsitesContainerSelector);
+            
+            researchContainers.forEach(container => {
+                const researchItems = container.querySelectorAll(researchWebsitesItemSelector);
+                researchWebsitesCount += researchItems.length;
+                
+                // Number research websites if not already numbered
+                if (researchItems.length > 0) {
+                    const firstItemFirstChild = researchItems[0].firstChild;
+                    if (!(firstItemFirstChild && firstItemFirstChild.nodeType === Node.ELEMENT_NODE && firstItemFirstChild.classList.contains(NUMBER_CLASS))) {
+                        console.log(`Gemini Source Counter: Numbering ${researchItems.length} research websites.`);
+                        researchItems.forEach((item, index) => {
+                            const numberSpan = document.createElement('span');
+                            numberSpan.className = NUMBER_CLASS;
+                            numberSpan.textContent = `${index + 1}. `;
+                            numberSpan.style.fontWeight = 'bold';
+                            numberSpan.style.marginRight = '5px';
+                            numberSpan.style.position = 'absolute';
+                            numberSpan.style.left = '3px';
+                            numberSpan.style.top = '50%';
+                            numberSpan.style.transform = 'translateY(-50%)';
+                            item.style.position = 'relative';
+                            item.style.paddingLeft = '25px';
+                            item.insertBefore(numberSpan, item.firstChild);
+                        });
+                    }
+                }
+            });
+            
+            console.log(`Gemini Source Counter: Found ${researchWebsitesCount} research websites in ${containerId}.`);
+        }
 
         // --- Create and Insert Display Element ---
         const displayDiv = document.createElement('div');
         displayDiv.id = counterID;
         displayDiv.textContent = `Sources Count -> Used: ${usedSourcesCount}, Not Used: ${unusedSourcesCount}`;
+        
+        // Add research websites count if any
+        if (researchWebsitesCount > 0) {
+            displayDiv.textContent += `, Research Websites: ${researchWebsitesCount}`;
+        }
+        
         displayDiv.style.fontWeight = 'bold';
         displayDiv.style.padding = '8px 16px 4px 24px';
         displayDiv.style.fontSize = '0.9em';
