@@ -2,7 +2,7 @@
 // @name         Gemini Deep Research Source Counter
 // @icon         https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg
 // @namespace    http://tampermonkey.net/
-// @version      0.7.0
+// @version      0.7.1
 // @description  Counts used and unused sources on Gemini deep research results and displays the count at the top. Also numbers each source item. Works across chat switches.
 // @author       Invictus
 // @match        https://gemini.google.com/*
@@ -21,14 +21,14 @@
     const RESEARCH_PROCESSED_ATTR = 'data-research-counted'; // Attribute for research containers
     const RESEARCH_IN_PROGRESS_ATTR = 'data-research-in-progress'; // Attribute for active research
 
-    console.log("Gemini Source Counter: Script loaded. Version 0.6.1");
+    console.log("Gemini Source Counter: Script loaded. Version 0.8.0");
 
     // --- Selectors ---
     const overallResponseParentSelector = 'response-container';
     const sourceListContainerSelector = 'deep-research-source-lists';
     const usedSourcesListSelector = 'div.source-list.used-sources';
     const unusedSourcesListSelector = 'div.source-list.unused-sources';
-    const sourceListItemSelector = 'browse-item';
+    const sourceListItemSelector = 'browse-web-item'; // Updated to match new HTML structure
     const insertionPointSelector = '.response-container-content';
     
     // New selectors for research websites in thinking panel
@@ -301,16 +301,32 @@
 
             // Number used sources if not already numbered
             if (usedItems.length > 0) {
-                const firstItemFirstChild = usedItems[0].firstChild;
-                if (!(firstItemFirstChild && firstItemFirstChild.nodeType === Node.ELEMENT_NODE && firstItemFirstChild.classList.contains(NUMBER_CLASS))) {
+                // Check if first item is already numbered
+                const firstItem = usedItems[0];
+                const browseItem = firstItem.querySelector('.browse-item');
+                const alreadyNumbered = browseItem ? browseItem.querySelector(`.${NUMBER_CLASS}`) : null;
+                
+                if (!alreadyNumbered) {
                     console.log(`Gemini Source Counter: Numbering ${usedItems.length} used items.`);
                     usedItems.forEach((item, index) => {
+                        // Find the browse-item div inside browse-web-item
+                        const browseItem = item.querySelector('.browse-item');
+                        if (!browseItem) return;
+                        
                         const numberSpan = document.createElement('span');
                         numberSpan.className = NUMBER_CLASS;
                         numberSpan.textContent = `${index + 1}. `;
                         numberSpan.style.fontWeight = 'bold';
                         numberSpan.style.marginRight = '5px';
-                        item.insertBefore(numberSpan, item.firstChild);
+                        numberSpan.style.position = 'absolute';
+                        numberSpan.style.left = '3px';
+                        numberSpan.style.top = '50%';
+                        numberSpan.style.transform = 'translateY(-50%)';
+                        
+                        // Position the browse-item relatively and add padding
+                        browseItem.style.position = 'relative';
+                        browseItem.style.paddingLeft = '25px';
+                        browseItem.insertBefore(numberSpan, browseItem.firstChild);
                     });
                 }
             }
@@ -325,16 +341,32 @@
 
             // Number unused sources if not already numbered
             if (unusedItems.length > 0) {
-                const firstItemFirstChild = unusedItems[0].firstChild;
-                if (!(firstItemFirstChild && firstItemFirstChild.nodeType === Node.ELEMENT_NODE && firstItemFirstChild.classList.contains(NUMBER_CLASS))) {
+                // Check if first item is already numbered
+                const firstItem = unusedItems[0];
+                const browseItem = firstItem.querySelector('.browse-item');
+                const alreadyNumbered = browseItem ? browseItem.querySelector(`.${NUMBER_CLASS}`) : null;
+                
+                if (!alreadyNumbered) {
                     console.log(`Gemini Source Counter: Numbering ${unusedItems.length} unused items.`);
                     unusedItems.forEach((item, index) => {
+                        // Find the browse-item div inside browse-web-item
+                        const browseItem = item.querySelector('.browse-item');
+                        if (!browseItem) return;
+                        
                         const numberSpan = document.createElement('span');
                         numberSpan.className = NUMBER_CLASS;
                         numberSpan.textContent = `${index + 1}. `;
                         numberSpan.style.fontWeight = 'bold';
                         numberSpan.style.marginRight = '5px';
-                        item.insertBefore(numberSpan, item.firstChild);
+                        numberSpan.style.position = 'absolute';
+                        numberSpan.style.left = '3px';
+                        numberSpan.style.top = '50%';
+                        numberSpan.style.transform = 'translateY(-50%)';
+                        
+                        // Position the browse-item relatively and add padding
+                        browseItem.style.position = 'relative';
+                        browseItem.style.paddingLeft = '25px';
+                        browseItem.insertBefore(numberSpan, browseItem.firstChild);
                     });
                 }
             }
