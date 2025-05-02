@@ -1,10 +1,10 @@
-# Gemini Deep Research Source Counter
+# 🔍 Gemini Deep Research Source Counter
 
 ![Userscript Version](https://img.shields.io/badge/version-0.7.1-blue)
 
 This userscript enhances the Google Gemini web interface (`gemini.google.com`) by providing quantitative details about the sources utilized during its "Deep Research" operations.
 
-## Description
+## 📝 Description
 
 When Gemini performs deep research (often triggered by complex queries requiring web lookups), it consults various web sources. This script modifies the Gemini interface to:
 
@@ -16,7 +16,7 @@ When Gemini performs deep research (often triggered by complex queries requiring
 
 The script uses a `MutationObserver` to detect and process new Gemini responses and research updates dynamically as they appear on the page, ensuring it works correctly within the single-page application nature of Gemini, including across chat switches.
 
-## Features
+## ✨ Features
 
 * **Source Counting:** Accurately counts sources listed under "Used sources" and "Not used sources".
 * **Research Website Counting:** Counts website chips displayed during the active research/thinking phase.
@@ -27,7 +27,7 @@ The script uses a `MutationObserver` to detect and process new Gemini responses 
 * **Robust Identification:** Uses specific HTML element selectors and data attributes (`data-sources-counted`, `data-research-counted`, `data-research-in-progress`) to target relevant content and avoid redundant processing.
 * **Persistent Functionality:** Operates correctly even when switching between different chats within the Gemini interface.
 
-## Preview
+## 🖼️ Preview
 
 ### Ongoing Research
 
@@ -36,7 +36,7 @@ The script uses a `MutationObserver` to detect and process new Gemini responses 
 ### Completed Research
 ![Completed Research Screenshot](./images/screenshot-completed-research.png)
 
-## Installation
+## 🚀 Installation
 
 1.  **Install a Userscript Manager:** You need a browser extension capable of running userscripts. Choose one compatible with your browser:
     * [Tampermonkey](https://www.tampermonkey.net/) (Recommended: Chrome, Firefox, Edge, Opera, Safari)
@@ -49,7 +49,7 @@ The script uses a `MutationObserver` to detect and process new Gemini responses 
 
 3.  **Confirm Installation:** The userscript manager will display information about the script (name, version, domains it runs on). Review the details and confirm the installation. The script requires access to `https://gemini.google.com/*`.
 
-## Usage
+## 🛠️ Usage
 
 1.  Ensure the userscript is enabled in your userscript manager.
 2.  Navigate to [https://gemini.google.com/](https://gemini.google.com/).
@@ -60,7 +60,7 @@ The script uses a `MutationObserver` to detect and process new Gemini responses 
 
 The script runs automatically; no manual activation is required beyond the initial prompt that triggers deep research.
 
-## Compatibility
+## 💻 Compatibility
 
 * **Browsers:** Primarily developed and tested on recent versions of Chrome and Firefox. Expected to work on other browsers that support compatible userscript managers.
 * **Userscript Managers:** Tampermonkey, Violentmonkey, Greasemonkey.
@@ -68,6 +68,6 @@ The script runs automatically; no manual activation is required beyond the initi
 
 **Important Note:** Web interfaces like Google Gemini are subject to frequent updates. Changes to the underlying HTML structure, CSS class names, or element IDs used by Gemini could potentially break this script's functionality. If the script stops working, it likely requires updates to its element selectors (`const` variables defining selectors in the code) to match the new interface structure.
 
-## License
+## ⚖️ License
 
 Licensed under GNU General Public License v3
