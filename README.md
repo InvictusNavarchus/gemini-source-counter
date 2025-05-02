@@ -36,33 +36,6 @@ The script uses a `MutationObserver` to detect and process new Gemini responses 
 ### Completed Research
 ![Completed Research Screenshot](./images/screenshot-completed-research.png)
 
-**Example of injected elements:**
-
-* **Completed Response Counter:**
-    ```
-    Sources Count -> Used: 5, Not Used: 3, Research Websites: 8
-    ```
-* **Active Research Counter:**
-    ```
-    Research in progress: 6 websites visited
-    ```
-* **Numbered Source Item (Conceptual HTML structure):**
-    ```html
-    <browse-web-item>
-      <div class="browse-item" style="position: relative; padding-left: 25px;">
-        <span class="gemini-source-item-number" style="font-weight: bold; margin-right: 5px; position: absolute; left: 3px; top: 50%; transform: translateY(-50%);">1. </span>
-        </div>
-    </browse-web-item>
-    ```
-* **Numbered Research Website Chip (Conceptual HTML structure):**
-    ```html
-     <browse-web-chip>
-        <div class="browse-chip" style="position: relative; padding-left: 25px;">
-             <span class="gemini-source-item-number" style="font-weight: bold; margin-right: 5px; position: absolute; left: 3px; top: 50%; transform: translateY(-50%);">1. </span>
-             </div>
-     </browse-web-chip>
-    ```
-
 ## Installation
 
 1.  **Install a Userscript Manager:** You need a browser extension capable of running userscripts. Choose one compatible with your browser:
