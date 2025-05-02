@@ -29,7 +29,12 @@ The script uses a `MutationObserver` to detect and process new Gemini responses 
 
 ## Preview
 
-*(Placeholder: Include a screenshot or GIF here demonstrating the counter display and numbered sources/websites within the Gemini interface. This significantly improves understanding.)*
+### Ongoing Research
+
+![Ongoing Research Screenshot](./images/screenshot-ongoing-research.png)
+
+### Completed Research
+![Completed Research Screenshot](./images/screenshot-completed-research.png)
 
 **Example of injected elements:**
 
