@@ -43,6 +43,34 @@
     // Active research panel selector
     const extendedResponsePanelSelector = 'extended-response-panel';
     
+    // Helper function to find the best element to attach source numbering to in a source item
+    function findSourceItemLabelTarget(item) {
+        // Strategy 1: Find the title-container (2025 May update, most specific target)
+        const titleContainer = item.querySelector('div.title-container');
+        
+        // Strategy 2: Find the browse-item inside the item (older structure)
+        const browseItem = item.querySelector('.browse-item');
+        
+        // Strategy 3: Find .mat-ripple.browse-item (newer structure) 
+        const matRippleItem = item.querySelector('.mat-ripple.browse-item');
+        
+        // Strategy 4: Find span with data-test-id="content" (another 2025 variant)
+        const linkContentSpan = item.querySelector('span[data-test-id="content"]');
+        const linkMatRipple = linkContentSpan ? linkContentSpan.querySelector('.mat-ripple.browse-item') : null;
+
+        // Strategy 5: Find .browse-chip (alternative structure)
+        const browseChip = item.querySelector('.browse-chip');
+        
+        // Choose the appropriate content element based on what's available
+        return titleContainer || browseItem || matRippleItem || linkMatRipple || browseChip || item;
+    }
+    
+    // Function to check if an item already has numbering
+    function isAlreadyNumbered(item) {
+        // Check if the item itself or any of its children has our number class
+        return item.querySelector(`.${NUMBER_CLASS}`) !== null;
+    }
+    
     // Function to process source items - accepts the source item element and its index
     function processSourceItem(item, index) {
         if (DEBUG) {
@@ -50,27 +78,11 @@
             console.log(`  HTML preview: ${item.outerHTML.substring(0, 200)}...`);
         }
 
-        // Handle the new source item structure with multiple detection strategies:
-        
-        // Strategy 1: Find the browse-item inside the item (older structure)
-        const browseItem = item.querySelector('.browse-item');
-        
-        // Strategy 2: Find .mat-ripple.browse-item (newer structure) 
-        const matRippleItem = item.querySelector('.mat-ripple.browse-item');
-        
-        // Strategy 3: Find the latest structure (2025 May update) - span with data-test-id="content"
-        const linkContentSpan = item.querySelector('span[data-test-id="content"]');
-        const linkMatRipple = linkContentSpan ? linkContentSpan.querySelector('.mat-ripple.browse-item') : null;
-        
-        // Strategy 4: Deep target - For 2025 new structure with deep nesting
-        // Target the actual place where we'll add the number for best visibility
-        const titleContainer = item.querySelector('div.title-container');
-        
-        // Choose the appropriate content element based on what's available
-        const contentElement = titleContainer || browseItem || matRippleItem || linkMatRipple || item;
+        // Get the target element for adding the number
+        const contentElement = findSourceItemLabelTarget(item);
         
         // Skip if already has number or if no valid content element
-        if (!contentElement || item.querySelector(`.${NUMBER_CLASS}`)) {
+        if (!contentElement || isAlreadyNumbered(item)) {
             if (DEBUG) {
                 console.log(`Gemini Source Counter DEBUG: Skipping item ${index}, already numbered or no content element`);
             }
@@ -226,13 +238,15 @@
                 console.log(`Gemini Source Counter: Numbering ${researchItems.length} research websites.`);
                 
                 researchItems.forEach((item, index) => {
+                    // Skip if already numbered
+                    if (isAlreadyNumbered(item)) return;
+                    
                     // Attempt to find the inner element - support both old and new structures
                     const contentElement = item.querySelector(researchWebsitesItemContentSelector) || 
                                           item.shadowRoot?.querySelector(researchWebsitesItemContentSelector) ||
                                           item;
                     
-                    // Skip if already has number or if no valid content element
-                    if (!contentElement || item.querySelector(`.${NUMBER_CLASS}`)) return;
+                    if (!contentElement) return;
                     
                     const numberSpan = document.createElement('span');
                     numberSpan.className = NUMBER_CLASS;
@@ -446,13 +460,8 @@
 
             // Number used sources if not already numbered
             if (usedItems.length > 0) {
-                // Check if first item is already numbered
-                const firstItem = usedItems[0];
-                const browseItem = firstItem.querySelector('.browse-item') || 
-                                  firstItem.querySelector('.browse-chip') ||
-                                  firstItem.querySelector('.mat-ripple.browse-item');
-                const alreadyNumbered = firstItem.querySelector(`.${NUMBER_CLASS}`) || 
-                                      (browseItem && browseItem.querySelector(`.${NUMBER_CLASS}`));
+                // Check if first item is already numbered using the isAlreadyNumbered helper
+                const alreadyNumbered = isAlreadyNumbered(usedItems[0]);
                 
                 if (!alreadyNumbered) {
                     console.log(`Gemini Source Counter: Numbering ${usedItems.length} used items.`);
@@ -478,13 +487,8 @@
 
             // Number unused sources if not already numbered
             if (unusedItems.length > 0) {
-                // Check if first item is already numbered
-                const firstItem = unusedItems[0];
-                const browseItem = firstItem.querySelector('.browse-item') || 
-                                  firstItem.querySelector('.browse-chip') ||
-                                  firstItem.querySelector('.mat-ripple.browse-item');
-                const alreadyNumbered = firstItem.querySelector(`.${NUMBER_CLASS}`) || 
-                                      (browseItem && browseItem.querySelector(`.${NUMBER_CLASS}`));
+                // Check if first item is already numbered using the isAlreadyNumbered helper
+                const alreadyNumbered = isAlreadyNumbered(unusedItems[0]);
                 
                 if (!alreadyNumbered) {
                     console.log(`Gemini Source Counter: Numbering ${unusedItems.length} unused items.`);
