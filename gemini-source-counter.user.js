@@ -2,7 +2,7 @@
 // @name         Gemini Deep Research Source Counter
 // @icon         https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg
 // @namespace    http://tampermonkey.net/
-// @version      0.7.2
+// @version      0.7.3
 // @description  Counts used and unused sources on Gemini deep research results and displays the count at the top. Also numbers each source item. Works across chat switches.
 // @author       Invictus
 // @match        https://gemini.google.com/*
@@ -21,7 +21,7 @@
     const RESEARCH_PROCESSED_ATTR = 'data-research-counted'; // Attribute for research containers
     const RESEARCH_IN_PROGRESS_ATTR = 'data-research-in-progress'; // Attribute for active research
 
-    console.log("Gemini Source Counter: Script loaded. Version 0.7.2");
+    console.log("Gemini Source Counter: Script loaded. Version 0.7.3");
 
     // --- Selectors ---
     const overallResponseParentSelector = 'response-container';
@@ -43,8 +43,93 @@
     // Active research panel selector
     const extendedResponsePanelSelector = 'extended-response-panel';
     
+    // Function to process source items - accepts the source item element and its index
+    function processSourceItem(item, index) {
+        if (DEBUG) {
+            console.log(`Gemini Source Counter DEBUG: Processing source item ${index}`, item);
+            console.log(`  HTML preview: ${item.outerHTML.substring(0, 200)}...`);
+        }
+
+        // Handle the new source item structure with multiple detection strategies:
+        
+        // Strategy 1: Find the browse-item inside the item (older structure)
+        const browseItem = item.querySelector('.browse-item');
+        
+        // Strategy 2: Find .mat-ripple.browse-item (newer structure) 
+        const matRippleItem = item.querySelector('.mat-ripple.browse-item');
+        
+        // Strategy 3: Find the latest structure (2025 May update) - span with data-test-id="content"
+        const linkContentSpan = item.querySelector('span[data-test-id="content"]');
+        const linkMatRipple = linkContentSpan ? linkContentSpan.querySelector('.mat-ripple.browse-item') : null;
+        
+        // Strategy 4: Deep target - For 2025 new structure with deep nesting
+        // Target the actual place where we'll add the number for best visibility
+        const titleContainer = item.querySelector('div.title-container');
+        
+        // Choose the appropriate content element based on what's available
+        const contentElement = titleContainer || browseItem || matRippleItem || linkMatRipple || item;
+        
+        // Skip if already has number or if no valid content element
+        if (!contentElement || item.querySelector(`.${NUMBER_CLASS}`)) {
+            if (DEBUG) {
+                console.log(`Gemini Source Counter DEBUG: Skipping item ${index}, already numbered or no content element`);
+            }
+            return;
+        }
+        
+        // Create number span
+        const numberSpan = document.createElement('span');
+        numberSpan.className = NUMBER_CLASS;
+        numberSpan.textContent = `${index + 1}. `;
+        numberSpan.style.fontWeight = 'bold';
+        numberSpan.style.marginRight = '5px';
+        numberSpan.style.position = 'absolute';
+        numberSpan.style.left = '8px';
+        numberSpan.style.top = '50%';
+        numberSpan.style.transform = 'translateY(-50%)';
+        numberSpan.style.zIndex = '10';
+        
+        // Add some positioning to the container element
+        contentElement.style.position = 'relative';
+        contentElement.style.paddingLeft = '25px';
+        
+        // Insert number at beginning of element
+        contentElement.insertBefore(numberSpan, contentElement.firstChild);
+        
+        console.log(`Gemini Source Counter: Added number ${index + 1} to source item`);
+    }
+    
     // Debug helper function - logs key structure info when enabled
     const DEBUG = false; // Set to true to enable debug logging
+    
+    // Function to inspect the HTML structure of source items for debugging
+    function inspectSourceStructure(sourceListContainer) {
+        if (!DEBUG) return;
+        
+        console.log("Gemini Source Counter DEBUG: Analyzing source container structure", sourceListContainer);
+        
+        // Check used sources
+        const usedList = sourceListContainer.querySelector(usedSourcesListSelector);
+        if (usedList) {
+            const firstItem = usedList.querySelector(sourceListItemSelector);
+            if (firstItem) {
+                console.log("Gemini Source Counter DEBUG: Used source item structure:", firstItem);
+                console.log("  innerHTML sample:", firstItem.innerHTML.substring(0, 200) + "...");
+                
+                // Log all child elements to find the right selectors
+                const allChildren = [];
+                firstItem.querySelectorAll("*").forEach(child => {
+                    allChildren.push({
+                        tagName: child.tagName,
+                        className: child.className,
+                        id: child.id,
+                        dataTestId: child.getAttribute('data-test-id')
+                    });
+                });
+                console.log("  All child elements:", allChildren);
+            }
+        }
+    }
     function debugLog(message, element = null) {
         if (!DEBUG) return;
         
@@ -313,13 +398,30 @@
             return false;
         }
 
+        // Try to find source lists - support both older and newer container structures
         const sourceListContainer = responseContainer.querySelector(sourceListContainerSelector);
+        
+        // If we have a source container, inspect its structure for debugging
+        if (sourceListContainer && DEBUG) {
+            inspectSourceStructure(sourceListContainer);
+        }
+        
         if (!sourceListContainer) {
             // This response doesn't have sources, might not be deep research
             // But still check for thinking panel in case research is in progress
             const thinkingPanel = responseContainer.querySelector(thinkingPanelSelector);
             if (!thinkingPanel) {
-                return false;
+                // In the new structure, we might have deep-research-source-lists in other locations
+                // Do a more aggressive search throughout the entire container
+                const altSourceLists = responseContainer.querySelectorAll('deep-research-source-lists');
+                if (altSourceLists.length === 0) {
+                    return false;
+                }
+                
+                if (DEBUG) {
+                    console.log("Gemini Source Counter DEBUG: Found alternative source lists:", altSourceLists);
+                    altSourceLists.forEach(list => inspectSourceStructure(list));
+                }
             }
         }
 
@@ -330,7 +432,13 @@
 
         // --- Count Sources and Add Numbers ---
         let usedSourcesCount = 0;
-        const usedSourcesList = sourceListContainer ? sourceListContainer.querySelector(usedSourcesListSelector) : null;
+        let usedSourcesList = sourceListContainer ? sourceListContainer.querySelector(usedSourcesListSelector) : null;
+        
+        // Search entire response container for sources if needed
+        if (!usedSourcesList) {
+            usedSourcesList = responseContainer.querySelector(usedSourcesListSelector);
+        }
+        
         if (usedSourcesList) {
             const usedItems = usedSourcesList.querySelectorAll(sourceListItemSelector);
             usedSourcesCount = usedItems.length;
@@ -340,8 +448,11 @@
             if (usedItems.length > 0) {
                 // Check if first item is already numbered
                 const firstItem = usedItems[0];
-                const browseItem = firstItem.querySelector('.browse-item') || firstItem.querySelector('.browse-chip');
-                const alreadyNumbered = browseItem ? browseItem.querySelector(`.${NUMBER_CLASS}`) : null;
+                const browseItem = firstItem.querySelector('.browse-item') || 
+                                  firstItem.querySelector('.browse-chip') ||
+                                  firstItem.querySelector('.mat-ripple.browse-item');
+                const alreadyNumbered = firstItem.querySelector(`.${NUMBER_CLASS}`) || 
+                                      (browseItem && browseItem.querySelector(`.${NUMBER_CLASS}`));
                 
                 if (!alreadyNumbered) {
                     console.log(`Gemini Source Counter: Numbering ${usedItems.length} used items.`);
@@ -353,7 +464,13 @@
         }
 
         let unusedSourcesCount = 0;
-        const unusedSourcesList = sourceListContainer ? sourceListContainer.querySelector(unusedSourcesListSelector) : null;
+        let unusedSourcesList = sourceListContainer ? sourceListContainer.querySelector(unusedSourcesListSelector) : null;
+        
+        // Search entire response container for unused sources if needed
+        if (!unusedSourcesList) {
+            unusedSourcesList = responseContainer.querySelector(unusedSourcesListSelector);
+        }
+        
         if (unusedSourcesList) {
             const unusedItems = unusedSourcesList.querySelectorAll(sourceListItemSelector);
             unusedSourcesCount = unusedItems.length;
@@ -363,8 +480,11 @@
             if (unusedItems.length > 0) {
                 // Check if first item is already numbered
                 const firstItem = unusedItems[0];
-                const browseItem = firstItem.querySelector('.browse-item') || firstItem.querySelector('.browse-chip');
-                const alreadyNumbered = browseItem ? browseItem.querySelector(`.${NUMBER_CLASS}`) : null;
+                const browseItem = firstItem.querySelector('.browse-item') || 
+                                  firstItem.querySelector('.browse-chip') ||
+                                  firstItem.querySelector('.mat-ripple.browse-item');
+                const alreadyNumbered = firstItem.querySelector(`.${NUMBER_CLASS}`) || 
+                                      (browseItem && browseItem.querySelector(`.${NUMBER_CLASS}`));
                 
                 if (!alreadyNumbered) {
                     console.log(`Gemini Source Counter: Numbering ${unusedItems.length} unused items.`);
