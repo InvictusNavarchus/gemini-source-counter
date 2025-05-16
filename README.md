@@ -1,8 +1,8 @@
 # 🔍 Gemini Deep Research Source Counter
 
-![Userscript Version](https://img.shields.io/badge/version-0.7.1-blue)
+![Userscript Version](https://img.shields.io/badge/version-0.7.2-blue)
 
-This userscript enhances the Google Gemini web interface (`gemini.google.com`) by providing quantitative details about the sources utilized during its "Deep Research" operations.
+This userscript enhances the Google Gemini web interface (`gemini.google.com`) by providing quantitative details about the sources utilized during its "Deep Research" operations. Version 0.7.2 adds compatibility with Gemini's new immersive deep research interface.
 
 ## 📝 Description
 
@@ -65,6 +65,7 @@ The script runs automatically; no manual activation is required beyond the initi
 * **Browsers:** Primarily developed and tested on recent versions of Chrome and Firefox. Expected to work on other browsers that support compatible userscript managers.
 * **Userscript Managers:** Tampermonkey, Violentmonkey, Greasemonkey.
 * **Target Website:** `https://gemini.google.com/*`
+* **UI Versions:** Compatible with both the classic deep research interface and the new immersive deep research interface (May 2025 update)
 
 **Important Note:** Web interfaces like Google Gemini are subject to frequent updates. Changes to the underlying HTML structure, CSS class names, or element IDs used by Gemini could potentially break this script's functionality. If the script stops working, it likely requires updates to its element selectors (`const` variables defining selectors in the code) to match the new interface structure.
 

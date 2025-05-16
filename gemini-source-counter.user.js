@@ -2,7 +2,7 @@
 // @name         Gemini Deep Research Source Counter
 // @icon         https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg
 // @namespace    http://tampermonkey.net/
-// @version      0.7.1
+// @version      0.7.2
 // @description  Counts used and unused sources on Gemini deep research results and displays the count at the top. Also numbers each source item. Works across chat switches.
 // @author       Invictus
 // @match        https://gemini.google.com/*
@@ -21,15 +21,15 @@
     const RESEARCH_PROCESSED_ATTR = 'data-research-counted'; // Attribute for research containers
     const RESEARCH_IN_PROGRESS_ATTR = 'data-research-in-progress'; // Attribute for active research
 
-    console.log("Gemini Source Counter: Script loaded. Version 0.8.0");
+    console.log("Gemini Source Counter: Script loaded. Version 0.7.2");
 
     // --- Selectors ---
     const overallResponseParentSelector = 'response-container';
-    const sourceListContainerSelector = 'deep-research-source-lists';
-    const usedSourcesListSelector = 'div.source-list.used-sources';
-    const unusedSourcesListSelector = 'div.source-list.unused-sources';
-    const sourceListItemSelector = 'browse-web-item'; // Updated to match new HTML structure
-    const insertionPointSelector = '.response-container-content';
+    const sourceListContainerSelector = 'deep-research-source-lists, source-list-container';
+    const usedSourcesListSelector = 'div.source-list.used-sources, div.used-sources';
+    const unusedSourcesListSelector = 'div.source-list.unused-sources, div.unused-sources';
+    const sourceListItemSelector = 'browse-web-item, browse-chip-item'; // Support both old and new structures
+    const insertionPointSelector = '.response-container-content, .research-content';
     
     // New selectors for research websites in thinking panel
     const thinkingPanelSelector = 'thinking-panel';
@@ -37,9 +37,29 @@
     const researchWebsitesItemSelector = 'browse-web-chip';
     const researchWebsitesItemContentSelector = '.browse-chip';
     
+    // Deep research immersive panel selector (new addition for the updated UI)
+    const deepResearchPanelSelector = 'deep-research-immersive-panel';
+    
     // Active research panel selector
     const extendedResponsePanelSelector = 'extended-response-panel';
     
+    // Debug helper function - logs key structure info when enabled
+    const DEBUG = false; // Set to true to enable debug logging
+    function debugLog(message, element = null) {
+        if (!DEBUG) return;
+        
+        if (element) {
+            console.log(`Gemini Source Counter DEBUG: ${message}`, element);
+            if (element instanceof Element) {
+                console.log(`  Element tag: ${element.tagName}`);
+                console.log(`  Element classes: ${element.className}`);
+                console.log(`  Element children: ${element.children.length}`);
+            }
+        } else {
+            console.log(`Gemini Source Counter DEBUG: ${message}`);
+        }
+    }
+
     // Function to create counter display for active research
     function createActiveResearchCounter(responsePanel) {
         // Skip if already processed
@@ -72,11 +92,24 @@
         displayDiv.style.borderBottom = '1px solid var(--mat-divider-color, #dadce0)';
         displayDiv.style.marginBottom = '8px';
         
-        // Find toolbar to insert after
+        // Find insertion point - try different options for different panel structures
         const toolbar = responsePanel.querySelector('toolbar');
+        const header = responsePanel.querySelector('header') || responsePanel.querySelector('.header');
+        const researchContent = responsePanel.querySelector('.research-content');
+        
         if (toolbar) {
             toolbar.insertAdjacentElement('afterend', displayDiv);
-            console.log(`Gemini Source Counter: Created active research counter for ${containerId}`);
+            console.log(`Gemini Source Counter: Created counter after toolbar for ${containerId}`);
+        } else if (header) {
+            header.insertAdjacentElement('afterend', displayDiv);
+            console.log(`Gemini Source Counter: Created counter after header for ${containerId}`);
+        } else if (researchContent) {
+            researchContent.insertAdjacentElement('afterbegin', displayDiv);
+            console.log(`Gemini Source Counter: Created counter at start of research content for ${containerId}`);
+        } else {
+            // Fallback insertion if no suitable insertion point is found
+            responsePanel.insertAdjacentElement('afterbegin', displayDiv);
+            console.log(`Gemini Source Counter: Created counter (fallback method) for ${containerId}`);
         }
         
         // Mark as processed
@@ -92,6 +125,7 @@
         }
         
         let researchWebsitesCount = 0;
+        // In the new immersive panel, browse-container elements can appear directly in the thinking panel
         const researchContainers = thinkingPanel.querySelectorAll(researchWebsitesContainerSelector);
         
         researchContainers.forEach(container => {
@@ -107,12 +141,13 @@
                 console.log(`Gemini Source Counter: Numbering ${researchItems.length} research websites.`);
                 
                 researchItems.forEach((item, index) => {
-                    // Find the inner browse-chip element
-                    const contentElement = item.querySelector(researchWebsitesItemContentSelector);
-                    if (!contentElement) return;
+                    // Attempt to find the inner element - support both old and new structures
+                    const contentElement = item.querySelector(researchWebsitesItemContentSelector) || 
+                                          item.shadowRoot?.querySelector(researchWebsitesItemContentSelector) ||
+                                          item;
                     
-                    // Skip if already has number
-                    if (item.querySelector(`.${NUMBER_CLASS}`)) return;
+                    // Skip if already has number or if no valid content element
+                    if (!contentElement || item.querySelector(`.${NUMBER_CLASS}`)) return;
                     
                     const numberSpan = document.createElement('span');
                     numberSpan.className = NUMBER_CLASS;
@@ -186,7 +221,8 @@
     // Setup observer for research container to watch for new items
     function setupResearchContainerObserver(container) {
         const parentContainer = container.closest(overallResponseParentSelector) || 
-                                container.closest(extendedResponsePanelSelector);
+                                container.closest(extendedResponsePanelSelector) ||
+                                container.closest(deepResearchPanelSelector);
         if (!parentContainer) return;
         
         const researchObserver = new MutationObserver(function(mutations) {
@@ -224,7 +260,8 @@
     // Setup observer for thinking panel to watch for new research containers
     function setupThinkingPanelObserver(thinkingPanel) {
         const parentContainer = thinkingPanel.closest(overallResponseParentSelector) || 
-                              thinkingPanel.closest(extendedResponsePanelSelector);
+                              thinkingPanel.closest(extendedResponsePanelSelector) ||
+                              thinkingPanel.closest(deepResearchPanelSelector);
         if (!parentContainer) return;
         
         const thinkingObserver = new MutationObserver(function(mutations) {
@@ -303,30 +340,13 @@
             if (usedItems.length > 0) {
                 // Check if first item is already numbered
                 const firstItem = usedItems[0];
-                const browseItem = firstItem.querySelector('.browse-item');
+                const browseItem = firstItem.querySelector('.browse-item') || firstItem.querySelector('.browse-chip');
                 const alreadyNumbered = browseItem ? browseItem.querySelector(`.${NUMBER_CLASS}`) : null;
                 
                 if (!alreadyNumbered) {
                     console.log(`Gemini Source Counter: Numbering ${usedItems.length} used items.`);
                     usedItems.forEach((item, index) => {
-                        // Find the browse-item div inside browse-web-item
-                        const browseItem = item.querySelector('.browse-item');
-                        if (!browseItem) return;
-                        
-                        const numberSpan = document.createElement('span');
-                        numberSpan.className = NUMBER_CLASS;
-                        numberSpan.textContent = `${index + 1}. `;
-                        numberSpan.style.fontWeight = 'bold';
-                        numberSpan.style.marginRight = '5px';
-                        numberSpan.style.position = 'absolute';
-                        numberSpan.style.left = '3px';
-                        numberSpan.style.top = '50%';
-                        numberSpan.style.transform = 'translateY(-50%)';
-                        
-                        // Position the browse-item relatively and add padding
-                        browseItem.style.position = 'relative';
-                        browseItem.style.paddingLeft = '25px';
-                        browseItem.insertBefore(numberSpan, browseItem.firstChild);
+                        processSourceItem(item, index);
                     });
                 }
             }
@@ -343,30 +363,13 @@
             if (unusedItems.length > 0) {
                 // Check if first item is already numbered
                 const firstItem = unusedItems[0];
-                const browseItem = firstItem.querySelector('.browse-item');
+                const browseItem = firstItem.querySelector('.browse-item') || firstItem.querySelector('.browse-chip');
                 const alreadyNumbered = browseItem ? browseItem.querySelector(`.${NUMBER_CLASS}`) : null;
                 
                 if (!alreadyNumbered) {
                     console.log(`Gemini Source Counter: Numbering ${unusedItems.length} unused items.`);
                     unusedItems.forEach((item, index) => {
-                        // Find the browse-item div inside browse-web-item
-                        const browseItem = item.querySelector('.browse-item');
-                        if (!browseItem) return;
-                        
-                        const numberSpan = document.createElement('span');
-                        numberSpan.className = NUMBER_CLASS;
-                        numberSpan.textContent = `${index + 1}. `;
-                        numberSpan.style.fontWeight = 'bold';
-                        numberSpan.style.marginRight = '5px';
-                        numberSpan.style.position = 'absolute';
-                        numberSpan.style.left = '3px';
-                        numberSpan.style.top = '50%';
-                        numberSpan.style.transform = 'translateY(-50%)';
-                        
-                        // Position the browse-item relatively and add padding
-                        browseItem.style.position = 'relative';
-                        browseItem.style.paddingLeft = '25px';
-                        browseItem.insertBefore(numberSpan, browseItem.firstChild);
+                        processSourceItem(item, index);
                     });
                 }
             }
@@ -442,27 +445,114 @@
         return true;
     }
 
+    // --- Process deep research immersive panel ---
+    function processDeepResearchPanel(panel) {
+        // Skip if already processed
+        if (panel.hasAttribute(PROCESSED_ATTR)) {
+            return false;
+        }
+
+        // Generate a unique ID for this panel
+        const panelId = panel.id || 
+            `deep-research-${Math.random().toString(36).substring(2, 9)}`;
+        if (!panel.id) {
+            panel.id = panelId;
+        }
+        
+        const counterID = `${COUNTER_ID_PREFIX}${panelId}`;
+        
+        // Check if counter already exists for this panel
+        if (document.getElementById(counterID)) {
+            return false;
+        }
+
+        const thinkingPanel = panel.querySelector(thinkingPanelSelector);
+        if (!thinkingPanel) {
+            return false;
+        }
+
+        // --- Create counter display for deep research ---
+        const displayDiv = document.createElement('div');
+        displayDiv.id = counterID;
+        displayDiv.textContent = `Research in progress: 0 websites visited`;
+        displayDiv.style.fontWeight = 'bold';
+        displayDiv.style.padding = '8px 16px 4px 24px';
+        displayDiv.style.fontSize = '0.9em';
+        displayDiv.style.color = 'var(--mat-sidenav-content-text-color, #3c4043)';
+        displayDiv.style.borderBottom = '1px solid var(--mat-divider-color, #dadce0)';
+        displayDiv.style.marginBottom = '8px';
+        
+        // Find insertion point - try different options for different panel structures
+        const toolbar = panel.querySelector('toolbar');
+        const header = panel.querySelector('header') || panel.querySelector('.header');
+        const researchContent = panel.querySelector('.research-content');
+        
+        if (toolbar) {
+            toolbar.insertAdjacentElement('afterend', displayDiv);
+            console.log(`Gemini Source Counter: Created deep research counter after toolbar for ${panelId}`);
+        } else if (header) {
+            header.insertAdjacentElement('afterend', displayDiv);
+            console.log(`Gemini Source Counter: Created deep research counter after header for ${panelId}`);
+        } else if (researchContent) {
+            researchContent.insertAdjacentElement('afterbegin', displayDiv);
+            console.log(`Gemini Source Counter: Created deep research counter at start of research content for ${panelId}`);
+        } else {
+            // Fallback insertion directly into the panel
+            panel.insertAdjacentElement('afterbegin', displayDiv);
+            console.log(`Gemini Source Counter: Created deep research counter (fallback method) for ${panelId}`);
+        }
+        
+        // Set up observer for thinking panel
+        setupThinkingPanelObserver(thinkingPanel);
+        
+        // Process initial research websites
+        const researchWebsitesCount = processResearchWebsites(thinkingPanel, displayDiv);
+        displayDiv.textContent = `Research in progress: ${researchWebsitesCount} websites visited`;
+        
+        // Mark as processed
+        panel.setAttribute(RESEARCH_IN_PROGRESS_ATTR, 'true');
+        panel.setAttribute(PROCESSED_ATTR, 'true');
+        console.log(`Gemini Source Counter: Processed deep research panel ${panelId}`);
+        
+        return true;
+    }
+
     // --- Main function to scan for and process all response containers ---
     function scanAndProcessResponses() {
         let processedAny = false;
         
         // Check for active research panels first
         const activeResearchPanels = document.querySelectorAll(extendedResponsePanelSelector);
+        debugLog(`Found ${activeResearchPanels.length} active research panels`);
         activeResearchPanels.forEach(panel => {
+            debugLog("Processing active research panel", panel);
             if (processActiveResearch(panel)) {
+                processedAny = true;
+            }
+        });
+        
+        // Check for the new deep research immersive panels
+        const deepResearchPanels = document.querySelectorAll(deepResearchPanelSelector);
+        debugLog(`Found ${deepResearchPanels.length} deep research immersive panels`);
+        deepResearchPanels.forEach(panel => {
+            debugLog("Processing deep research immersive panel", panel);
+            if (processDeepResearchPanel(panel)) {
                 processedAny = true;
             }
         });
         
         // Then process regular response containers
         const responseContainers = document.querySelectorAll(overallResponseParentSelector);
+        debugLog(`Found ${responseContainers.length} regular response containers`);
         
-        if (responseContainers.length === 0 && !processedAny) {
+        if (responseContainers.length === 0 && deepResearchPanels.length === 0 && !processedAny) {
+            debugLog("No containers found to process");
             return false;
         }
         
         // Process each container
         responseContainers.forEach(container => {
+            debugLog("Processing regular response container", container);
             if (processResponseContainer(container)) {
                 processedAny = true;
             }
@@ -475,9 +565,61 @@
     const targetNode = document.body;
     const config = { childList: true, subtree: true };
 
-    const callback = function(mutationsList, obs) {
-        // Check for new responses on DOM changes
+    // Add a debounce mechanism to avoid excessive processing
+    function debounce(func, wait) {
+        let timeout;
+        return function() {
+            const context = this, args = arguments;
+            clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                func.apply(context, args);
+            }, wait);
+        };
+    }
+    
+    const debouncedScan = debounce(() => {
         scanAndProcessResponses();
+    }, 300); // Wait 300ms before processing changes
+    
+    const callback = function(mutationsList, obs) {
+        let shouldProcess = false;
+        
+        // Check if mutations include relevant elements before scanning
+        for (const mutation of mutationsList) {
+            if (mutation.type === 'childList') {
+                // Look for our target elements in added nodes
+                for (let i = 0; i < mutation.addedNodes.length; i++) {
+                    const node = mutation.addedNodes[i];
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        if (
+                            node.matches?.(deepResearchPanelSelector) || 
+                            node.matches?.(extendedResponsePanelSelector) || 
+                            node.matches?.(overallResponseParentSelector) ||
+                            node.matches?.(thinkingPanelSelector) ||
+                            node.querySelector?.(deepResearchPanelSelector) ||
+                            node.querySelector?.(extendedResponsePanelSelector) ||
+                            node.querySelector?.(overallResponseParentSelector) ||
+                            node.querySelector?.(thinkingPanelSelector) ||
+                            node.querySelector?.(sourceListContainerSelector) ||
+                            node.querySelector?.(researchWebsitesContainerSelector)
+                        ) {
+                            shouldProcess = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (shouldProcess) {
+                break;
+            }
+        }
+        
+        // Only trigger scan if we found relevant elements
+        if (shouldProcess) {
+            debugLog("Detected relevant DOM changes, scheduling scan");
+            debouncedScan();
+        }
     };
 
     const observer = new MutationObserver(callback);
